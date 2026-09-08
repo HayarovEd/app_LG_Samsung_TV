@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiEpg, authorize, buildAuthenticatedStreamUrl, getCategories, getChannels, getEpg, isApiConfigured } from './api'
-import { getTizenPlayer, startTizenPlayer, stopTizenPlayer } from './player'
+import { getPlayerMode, getTizenPlayer, startTizenPlayer, stopTizenPlayer } from './player'
 
 type Screen = 'login' | 'channels' | 'player'
 type FocusTarget = 'login' | 'categories' | 'channels' | 'player'
@@ -198,6 +198,7 @@ function App() {
     ? buildAuthenticatedStreamUrl(selectedChannel.url, username, password)
     : undefined
   const tizenPlayer = getTizenPlayer()
+  const playerMode = getPlayerMode(tizenPlayer)
   const selectedEpg = epg
     .filter((item) => item.channelUuid === selectedChannel.id)
     .slice(0, 4)
@@ -295,7 +296,7 @@ function App() {
             ) : (
               <div className="player-placeholder"><span>{selectedChannel.number}</span><strong>{selectedChannel.name}</strong><small>{playerError || 'Демо-поток готов к подключению'}</small></div>
             )}
-            <div className="player-controls"><span className="play-icon">▶</span><div><strong>{selectedChannel.programme}</strong><small>Прямой эфир · {selectedChannel.time}</small></div><span className="quality">HD</span></div>
+            <div className="player-controls"><span className="play-icon">▶</span><div><strong>{selectedChannel.programme}</strong><small>Прямой эфир · {selectedChannel.time} · {playerMode}</small></div><span className="quality">HD</span></div>
           </div>
           <div className="player-details"><span className="eyebrow">СЕЙЧАС В ЭФИРЕ</span><h1>{selectedChannel.name}</h1><p>{selectedChannel.programme}</p><button className="primary-button" onClick={() => setScreen('channels')}>Вернуться к каналам <span>Back</span></button></div>
         </section>

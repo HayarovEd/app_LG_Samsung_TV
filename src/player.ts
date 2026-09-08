@@ -20,6 +20,12 @@ export function getTizenPlayer() {
   return window.webapis?.avplay ?? null
 }
 
+export function getPlayerMode(tizenPlayer: NativePlayer | null) {
+  if (tizenPlayer) return 'Samsung AVPlay'
+  if ('webOS' in window) return 'LG webOS HTML5'
+  return 'HTML5 browser'
+}
+
 export function startTizenPlayer(
   player: NativePlayer,
   url: string,
