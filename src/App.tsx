@@ -50,6 +50,12 @@ function App() {
     [categoryList, channelList, selectedCategory],
   )
 
+  useEffect(() => {
+    if (visibleChannels.length > 0 && !visibleChannels.some((channel) => channel.id === selectedChannel.id)) {
+      setSelectedChannel(visibleChannels[0])
+    }
+  }, [selectedChannel.id, visibleChannels])
+
   const submitLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLoginError('')
