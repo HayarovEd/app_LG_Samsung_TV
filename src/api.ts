@@ -35,6 +35,7 @@ type EpgResponse = { entries: ApiEpg[]; totalCount: number }
 type CategoryResponse = { entries: Array<{ key: string; val: string }> }
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '')
+const streamBaseUrl = (import.meta.env.VITE_STREAM_BASE_URL || apiBaseUrl)?.replace(/\/$/, '')
 const requestTimeoutMs = 12000
 
 function requireApiBaseUrl() {
@@ -92,7 +93,7 @@ export async function getChannels(username: string, password: string): Promise<A
     id: channel.uuid,
     name: channel.name,
     number: String(channel.number).padStart(2, '0'),
-    url: `${requireApiBaseUrl()}/stream/channel/${channel.uuid}`,
+    url: `${streamBaseUrl || requireApiBaseUrl()}/stream/channel/${channel.uuid}`,
     logo: channel.icon_public_url ?? undefined,
     categoryIds: channel.tags ?? [],
   }))
@@ -126,7 +127,7 @@ export async function getCategories(username: string, password: string): Promise
 }
 
 export function buildAuthenticatedStreamUrl(url: string, username: string, password: string) {
-  const streamUrl = new URL(url)
+  const streamUrl = new URL(url, window.location.origin)
   streamUrl.username = username
   streamUrl.password = password
   return streamUrl.toString()
