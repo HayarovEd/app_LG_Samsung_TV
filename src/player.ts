@@ -10,7 +10,9 @@ export type NativePlayer = {
 
 declare global {
   interface Window {
-    webapis?: { avplay?: NativePlayer }
+    webapis?: {
+      avplay?: NativePlayer
+    }
   }
 }
 
@@ -18,7 +20,12 @@ export function getTizenPlayer() {
   return window.webapis?.avplay ?? null
 }
 
-export function startTizenPlayer(player: NativePlayer, url: string, bounds: { left: number; top: number; width: number; height: number }, onError: (error: unknown) => void) {
+export function startTizenPlayer(
+  player: NativePlayer,
+  url: string,
+  bounds: { left: number; top: number; width: number; height: number },
+  onError: (error: unknown) => void,
+) {
   player.open(url)
   player.setDisplayRect(bounds.left, bounds.top, bounds.width, bounds.height)
   player.setListener({ onerror: onError })
@@ -26,5 +33,9 @@ export function startTizenPlayer(player: NativePlayer, url: string, bounds: { le
 }
 
 export function stopTizenPlayer(player: NativePlayer) {
-  try { player.stop() } finally { player.close() }
+  try {
+    player.stop()
+  } finally {
+    player.close()
+  }
 }
