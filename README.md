@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to an HTTPS API endpoint with CORS enabled. Set `VITE_TEST_STREAM_URL` only for local player testing. Without the API URL, the app runs in demo mode.
+Copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to an HTTPS API endpoint with CORS enabled. Set `VITE_STREAM_BASE_URL` when the native TV player must use a separate direct stream origin. Set `VITE_TEST_STREAM_URL` only for local player testing. Without the API URL, the app runs in demo mode.
 
 ## Build
 
