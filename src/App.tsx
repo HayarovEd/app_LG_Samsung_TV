@@ -66,6 +66,11 @@ function App() {
       return
     }
 
+    if (!username.trim() || !password) {
+      setLoginError('Введите логин и пароль')
+      return
+    }
+
     setIsLoading(true)
     try {
       await authorize(username, password)
@@ -223,7 +228,7 @@ function App() {
             <label>ПАРОЛЬ<input name="password" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="••••••••" autoComplete="current-password" /></label>
             {loginError && <p className="error-note">{loginError}</p>}
             <button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? 'Подключение...' : 'Войти'} <span>Enter ↵</span></button>
-            <button className="ghost-button" type="button" onClick={() => setScreen('channels')}>Демо-режим</button>
+            <button className="ghost-button" type="button" onClick={() => { setScreen('channels'); setFocusTarget('categories') }}>Демо-режим</button>
           </form>
         </section>
       )}
