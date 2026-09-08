@@ -31,16 +31,24 @@ export function startTizenPlayer(
   url: string,
   bounds: { left: number; top: number; width: number; height: number },
   onError: (error: unknown) => void,
+  onReady: () => void,
 ) {
   player.open(url)
   player.setDisplayRect(bounds.left, bounds.top, bounds.width, bounds.height)
   player.setListener({ onerror: onError })
-  player.prepareAsync(() => player.play(), onError)
+  player.prepareAsync(() => {
+    player.play()
+    onReady()
+  }, onError)
 }
 
 export function stopTizenPlayer(player: NativePlayer) {
   try {
-    player.stop()
+    try {
+      player.stop()
+    } catch {
+      // AVPlay may already be stopped after a failed prepare.
+    }
   } finally {
     player.close()
   }

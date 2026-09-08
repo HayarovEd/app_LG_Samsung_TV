@@ -4,6 +4,7 @@ import { getPlayerMode, getTizenPlayer, startTizenPlayer, stopTizenPlayer } from
 
 type Screen = 'login' | 'channels' | 'player'
 type FocusTarget = 'login' | 'categories' | 'channels' | 'player'
+type PlayerState = 'idle' | 'connecting' | 'playing' | 'error'
 
 type Channel = {
   id: string
@@ -40,6 +41,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [playerError, setPlayerError] = useState('')
+  const [playerState, setPlayerState] = useState<PlayerState>('idle')
   const playerStageRef = useRef<HTMLDivElement>(null)
   const [epg, setEpg] = useState<ApiEpg[]>([])
 
@@ -190,6 +192,7 @@ function App() {
   const openChannel = (channel: Channel) => {
     setSelectedChannel(channel)
     setPlayerError('')
+    setPlayerState('idle')
     setScreen('player')
     setFocusTarget('player')
   }
@@ -209,9 +212,20 @@ function App() {
     if (screen !== 'player' || !streamUrl || !tizenPlayer || !playerStageRef.current) return
 
     const bounds = playerStageRef.current.getBoundingClientRect()
+    setPlayerState('connecting')
     try {
-      startTizenPlayer(tizenPlayer, streamUrl, bounds, () => setPlayerError('Поток недоступен через Samsung AVPlay'))
+      startTizenPlayer(
+        tizenPlayer,
+        streamUrl,
+        bounds,
+        () => {
+          setPlayerState('error')
+          setPlayerError('Поток недоступен через Samsung AVPlay')
+        },
+        () => setPlayerState('playing'),
+      )
     } catch {
+      setPlayerState('error')
       setPlayerError('Не удалось запустить Samsung AVPlay')
     }
 
@@ -292,11 +306,11 @@ function App() {
             {tizenPlayer && streamUrl && !playerError ? (
               <div className="native-player-surface" aria-label="Samsung AVPlay" />
             ) : streamUrl && !playerError ? (
-              <video className="live-video" src={streamUrl} autoPlay controls playsInline onError={() => setPlayerError('Поток недоступен в браузере телевизора')} />
+              <video className="live-video" src={streamUrl} autoPlay controls playsInline onPlaying={() => setPlayerState('playing')} onWaiting={() => setPlayerState('connecting')} onError={() => { setPlayerState('error'); setPlayerError('Поток недоступен в браузере телевизора') }} />
             ) : (
               <div className="player-placeholder"><span>{selectedChannel.number}</span><strong>{selectedChannel.name}</strong><small>{playerError || 'Демо-поток готов к подключению'}</small></div>
             )}
-            <div className="player-controls"><span className="play-icon">▶</span><div><strong>{selectedChannel.programme}</strong><small>Прямой эфир · {selectedChannel.time} · {playerMode}</small></div><span className="quality">HD</span></div>
+            <div className="player-controls"><span className="play-icon">▶</span><div><strong>{selectedChannel.programme}</strong><small>Прямой эфир · {selectedChannel.time} · {playerMode} · {playerState}</small></div><span className="quality">HD</span></div>
           </div>
           <div className="player-details"><span className="eyebrow">СЕЙЧАС В ЭФИРЕ</span><h1>{selectedChannel.name}</h1><p>{selectedChannel.programme}</p><button className="primary-button" onClick={() => setScreen('channels')}>Вернуться к каналам <span>Back</span></button></div>
         </section>
