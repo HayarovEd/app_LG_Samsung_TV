@@ -301,7 +301,7 @@ function App() {
             <span className="eyebrow">ВЫБРАННЫЙ КАНАЛ</span>
             <div className="now-preview" style={{ background: `linear-gradient(135deg, ${selectedChannel.color}, #101820)` }}><span>{selectedChannel.number}</span><i>ON AIR</i></div>
             <strong>{selectedChannel.name}</strong>
-            {selectedEpg.length > 0 ? <div className="epg-list">{selectedEpg.map((item) => <div className="epg-item" key={item.eventId}><span>{formatEpgTime(item.start)}</span><strong>{item.title}</strong></div>)}</div> : <p>{selectedChannel.programme} <span>сейчас</span></p>}
+            {selectedEpg.length > 0 ? <div className="epg-list">{selectedEpg.map((item) => <div className="epg-item" key={item.eventId}><span>{formatEpgTime(item.start)} {item.ageRating > 0 ? `· ${item.ageRating}+` : ''}</span><strong>{item.title}</strong>{item.description && <small>{item.description}</small>}</div>)}</div> : <p>{selectedChannel.programme} <span>сейчас</span></p>}
           </aside>
         </section>
       )}

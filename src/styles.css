@@ -26,7 +26,7 @@ h1, h2, p { margin: 0; } h1 { font-size: clamp(44px, 5vw, 76px); line-height: .9
 .live-video { width: 100%; height: 100%; object-fit: contain; background: #050b0f; }
 .native-player-surface { width: 100%; height: 100%; }
 .epg-list { display: grid; gap: 10px; margin-top: 18px; }
-.epg-item { display: grid; gap: 4px; padding-left: 10px; border-left: 2px solid var(--line); }
+.epg-item { display: grid; gap: 4px; padding-left: 10px; border-left: 2px solid var(--line); }.epg-item small { color: var(--muted); font-size: 11px; line-height: 1.4; }
 .epg-item:first-child { border-color: var(--cyan); }
 .epg-item span { color: var(--cyan); font: 10px 'DM Mono', monospace; }
 .epg-item strong { font-size: 12px; line-height: 1.35; }
