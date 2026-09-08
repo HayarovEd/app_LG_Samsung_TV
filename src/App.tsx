@@ -109,18 +109,33 @@ function App() {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
         if (screen === 'channels' && focusTarget === 'categories') {
-            const current = categoryList.indexOf(selectedCategory)
+          const current = categoryList.indexOf(selectedCategory)
           const next = event.key === 'ArrowRight' ? current + 1 : current - 1
           if (categoryList[next]) setSelectedCategory(categoryList[next])
+        } else if (screen === 'channels' && focusTarget === 'channels' && visibleChannels.length > 0) {
+          const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
+          const next = event.key === 'ArrowRight' ? current + 1 : current - 1
+          if (visibleChannels[next]) setSelectedChannel(visibleChannels[next])
         }
-        if (screen === 'channels' && focusTarget === 'channels') setFocusTarget('categories')
         return
       }
 
       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault()
         if (screen === 'login') return
-        setFocusTarget(focusTarget === 'categories' ? 'channels' : 'categories')
+        if (screen === 'channels' && focusTarget === 'channels' && visibleChannels.length > 0) {
+          const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
+          const next = event.key === 'ArrowDown' ? current + 2 : current - 2
+          if (visibleChannels[next]) setSelectedChannel(visibleChannels[next])
+          else if (event.key === 'ArrowUp') setFocusTarget('categories')
+        } else if (screen === 'channels' && event.key === 'ArrowDown') {
+          if (!visibleChannels.some((channel) => channel.id === selectedChannel.id) && visibleChannels[0]) {
+            setSelectedChannel(visibleChannels[0])
+          }
+          setFocusTarget('channels')
+        } else {
+          setFocusTarget('categories')
+        }
         return
       }
 
@@ -139,7 +154,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [categoryList, focusTarget, screen, selectedCategory])
+  }, [categoryList, focusTarget, screen, selectedCategory, selectedChannel, visibleChannels])
 
   const openChannel = (channel: Channel) => {
     setSelectedChannel(channel)
