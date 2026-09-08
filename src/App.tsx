@@ -134,6 +134,15 @@ function App() {
       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault()
         if (screen === 'login') return
+        if (screen === 'player' && visibleChannels.length > 0) {
+          const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
+          const next = event.key === 'ArrowDown' ? current + 1 : current - 1
+          if (visibleChannels[next]) {
+            setSelectedChannel(visibleChannels[next])
+            setPlayerError('')
+          }
+          return
+        }
         if (screen === 'channels' && focusTarget === 'channels' && visibleChannels.length > 0) {
           const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
           const next = event.key === 'ArrowDown' ? current + 2 : current - 2
@@ -146,6 +155,17 @@ function App() {
           setFocusTarget('channels')
         } else {
           setFocusTarget('categories')
+        }
+        return
+      }
+
+      if (screen === 'player' && (event.key === 'PageUp' || event.key === 'PageDown')) {
+        event.preventDefault()
+        const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
+        const next = event.key === 'PageDown' ? current + 1 : current - 1
+        if (visibleChannels[next]) {
+          setSelectedChannel(visibleChannels[next])
+          setPlayerError('')
         }
         return
       }
