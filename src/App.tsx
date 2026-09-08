@@ -283,7 +283,9 @@ function App() {
             ))}
           </nav>
           <div className="channel-grid">
-            {visibleChannels.map((channel) => (
+            {visibleChannels.length === 0 ? (
+              <p className="empty-state">В этой категории нет доступных каналов</p>
+            ) : visibleChannels.map((channel) => (
               <button key={channel.id} className={`channel-card ${focusTarget === 'channels' && selectedChannel.id === channel.id ? 'is-focused' : ''}`} onClick={() => openChannel(channel)}>
                 <span className="channel-logo" style={{ background: channel.color }}>{channel.number}</span>
                 <span className="channel-info"><strong>{channel.name}</strong><small>{channel.programme}</small></span>
