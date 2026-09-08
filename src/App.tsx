@@ -11,6 +11,7 @@ type Channel = {
   name: string
   number: string
   url?: string
+  logo?: string
   category: string
   programme: string
   time: string
@@ -88,6 +89,7 @@ function App() {
         name: channel.name,
         number: channel.number,
         url: channel.url,
+        logo: channel.logo,
         category: channel.categoryIds.map((id) => categoryByKey.get(id)).find(Boolean) ?? categoryNames[0],
         programme: 'Прямой эфир',
         time: 'сейчас',
@@ -287,7 +289,9 @@ function App() {
               <p className="empty-state">В этой категории нет доступных каналов</p>
             ) : visibleChannels.map((channel) => (
               <button key={channel.id} className={`channel-card ${focusTarget === 'channels' && selectedChannel.id === channel.id ? 'is-focused' : ''}`} onClick={() => openChannel(channel)}>
-                <span className="channel-logo" style={{ background: channel.color }}>{channel.number}</span>
+                <span className="channel-logo" style={{ background: channel.color }}>
+                  {channel.logo ? <img src={channel.logo} alt="" onError={(event) => { event.currentTarget.hidden = true }} /> : channel.number}
+                </span>
                 <span className="channel-info"><strong>{channel.name}</strong><small>{channel.programme}</small></span>
                 <span className="channel-time">{channel.time}</span>
               </button>
