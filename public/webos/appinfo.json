@@ -1,0 +1,13 @@
+{
+  "id": "ru.hayaroved.teletv",
+  "version": "0.1.0",
+  "vendor": "HayarovEd",
+  "type": "web",
+  "main": "index.html",
+  "title": "Tele TV",
+  "icon": "icon.png",
+  "largeIcon": "icon.png",
+  "resolution": "1920x1080",
+  "uiRevision": 1,
+  "disableBackHistoryAPI": true
+}
