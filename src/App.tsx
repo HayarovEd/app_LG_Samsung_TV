@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiEpg, authorize, buildAuthenticatedStreamUrl, getCategories, getChannels, getEpg, isApiConfigured } from './api'
 import { getPlayerMode, getTizenPlayer, startTizenPlayer, stopTizenPlayer } from './player'
 
-type Screen = 'login' | 'channels' | 'player'
+type Screen = 'login' | 'channels' | 'guide' | 'player'
 type FocusTarget = 'login' | 'categories' | 'channels' | 'player'
 type PlayerState = 'idle' | 'connecting' | 'playing' | 'error'
 
@@ -29,29 +29,97 @@ const demoChannels: Channel[] = [
   { id: '5', name: 'Наука', number: '24', category: 'Познавательное', programme: 'Космос рядом', time: '22:10', color: '#2d8b83' },
   { id: '6', name: 'Мульт', number: '31', category: 'Детские', programme: 'Ми-ми-мишки', time: '21:15', color: '#e08b4c' },
 ]
+const radioChannel: Channel = {
+  id: 'radio-impuls',
+  name: 'Радио Импульс',
+  number: '1000',
+  url: 'https://impulsfm.ru/impuls',
+  logo: 'https://radio.impulsfm.ru/images/logo3.svg',
+  category: 'Радио',
+  programme: 'Радио Импульс',
+  time: 'эфир',
+  color: '#28c42e',
+}
+const recentChannelsStorageKey = 'tele-tv-recent-channels'
+const credentialsStorageKey = 'tele-tv-credentials'
+const recentChannelsLimit = 8
+
+function loadCredentials() {
+  const stored = localStorage.getItem(credentialsStorageKey)
+  if (!stored) return { username: '', password: '' }
+  try {
+    const parsed = JSON.parse(stored)
+    return {
+      username: typeof parsed.username === 'string' ? parsed.username : '',
+      password: typeof parsed.password === 'string' ? parsed.password : '',
+    }
+  } catch {
+    return { username: '', password: '' }
+  }
+}
+
+function loadRecentChannels() {
+  const stored = localStorage.getItem(recentChannelsStorageKey)
+  if (!stored) return []
+  try {
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed as Channel[] : []
+  } catch {
+    return []
+  }
+}
 
 function App() {
+  const savedCredentials = useMemo(() => loadCredentials(), [])
   const [screen, setScreen] = useState<Screen>('login')
   const [focusTarget, setFocusTarget] = useState<FocusTarget>('login')
   const [categoryList, setCategoryList] = useState(demoCategories)
   const [selectedCategory, setSelectedCategory] = useState(demoCategories[0])
   const [channelList, setChannelList] = useState<Channel[]>(demoChannels)
+  const [channelsByCategory, setChannelsByCategory] = useState<Record<string, Channel[]>>(
+    Object.fromEntries(demoCategories.map((category) => [
+      category,
+      category === demoCategories[0] ? demoChannels : demoChannels.filter((channel) => channel.category === category),
+    ])),
+  )
   const [selectedChannel, setSelectedChannel] = useState(demoChannels[0])
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [recentChannels, setRecentChannels] = useState<Channel[]>(() => loadRecentChannels())
+  const [username, setUsername] = useState(savedCredentials.username)
+  const [password, setPassword] = useState(savedCredentials.password)
   const [isLoading, setIsLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [playerError, setPlayerError] = useState('')
   const [playerState, setPlayerState] = useState<PlayerState>('idle')
   const playerStageRef = useRef<HTMLDivElement>(null)
   const [epg, setEpg] = useState<ApiEpg[]>([])
+  const [currentTime, setCurrentTime] = useState(() => new Date())
 
-  const visibleChannels = useMemo(
-    () => selectedCategory === categoryList[0]
-      ? channelList
-      : channelList.filter((channel) => channel.category === selectedCategory),
-    [categoryList, channelList, selectedCategory],
-  )
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const formatHeaderDate = (date: Date) => date.toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+  const weekday = currentTime.toLocaleDateString('ru-RU', { weekday: 'long' })
+
+  const logout = () => {
+    setUsername('')
+    setPassword('')
+    setEpg([])
+    setRecentChannels([])
+    localStorage.removeItem(recentChannelsStorageKey)
+    localStorage.removeItem(credentialsStorageKey)
+    setScreen('login')
+    setFocusTarget('login')
+  }
+
+  const visibleChannels = useMemo(() => {
+    return channelsByCategory[selectedCategory] ?? []
+  }, [categoryList, channelList, channelsByCategory, selectedCategory])
 
   useEffect(() => {
     if (visibleChannels.length > 0 && !visibleChannels.some((channel) => channel.id === selectedChannel.id)) {
@@ -77,11 +145,11 @@ function App() {
     setIsLoading(true)
     try {
       await authorize(username, password)
+      localStorage.setItem(credentialsStorageKey, JSON.stringify({ username, password }))
       const [channelsResult, epgResult, categoriesResult] = await Promise.allSettled([getChannels(username, password), getEpg(username, password), getCategories(username, password)])
       if (channelsResult.status === 'rejected') throw channelsResult.reason
       const remoteChannels = channelsResult.value
       const remoteCategories = categoriesResult.status === 'fulfilled' ? categoriesResult.value : []
-      const categoryNames = ['Все каналы', ...remoteCategories.map((category) => category.name)]
       const categoryByKey = new Map(remoteCategories.map((category) => [category.key, category.name]))
       const colors = ['#d94b39', '#3478b8', '#7c5aaa', '#bb7a3c', '#2d8b83', '#e08b4c']
       const mappedChannels: Channel[] = remoteChannels.map((channel, index) => ({
@@ -90,16 +158,25 @@ function App() {
         number: channel.number,
         url: channel.url,
         logo: channel.logo,
-        category: channel.categoryIds.map((id) => categoryByKey.get(id)).find(Boolean) ?? categoryNames[0],
+        category: channel.categoryIds.map((id) => categoryByKey.get(id)).find(Boolean) ?? 'Все каналы',
         programme: 'Прямой эфир',
         time: 'сейчас',
         color: colors[index % colors.length],
       }))
+      const groupedChannels = remoteCategories.reduce<Record<string, Channel[]>>((groups, category) => {
+        const channels = mappedChannels.filter((channel, index) => remoteChannels[index].categoryIds.includes(category.key))
+        if (channels.length > 0) groups[category.name] = channels
+        return groups
+      }, {})
+      groupedChannels[radioChannel.category] = [radioChannel]
+      const categoryNames = Object.keys(groupedChannels)
       setChannelList(mappedChannels)
+      setChannelsByCategory(groupedChannels)
       setCategoryList(categoryNames)
-      setSelectedCategory(categoryNames[0])
+      setSelectedCategory(categoryNames[0] ?? radioChannel.category)
       setEpg(epgResult.status === 'fulfilled' ? epgResult.value : [])
-      setSelectedChannel(mappedChannels[0] ?? demoChannels[0])
+      setSelectedChannel(groupedChannels[categoryNames[0]]?.[0] ?? radioChannel)
+      setRecentChannels((current) => current.filter((recent) => mappedChannels.some((channel) => channel.id === recent.id) || recent.id === radioChannel.id))
       setScreen('channels')
       setFocusTarget('categories')
     } catch (error) {
@@ -110,6 +187,12 @@ function App() {
   }
 
   useEffect(() => {
+    if (isApiConfigured && savedCredentials.username && savedCredentials.password) {
+      document.querySelector<HTMLFormElement>('.login-panel')?.requestSubmit()
+    }
+  }, [savedCredentials.password, savedCredentials.username])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' || event.key === 'Backspace') {
         event.preventDefault()
@@ -117,7 +200,17 @@ function App() {
           setScreen('channels')
           setFocusTarget('channels')
         }
+        else if (screen === 'guide') {
+          setScreen('channels')
+          setFocusTarget('channels')
+        }
         else if (screen === 'channels') setFocusTarget('categories')
+        return
+      }
+
+      if (['g', 'guide', 'info'].includes(event.key.toLowerCase()) && (screen === 'channels' || screen === 'player')) {
+        event.preventDefault()
+        setScreen('guide')
         return
       }
 
@@ -192,6 +285,11 @@ function App() {
   }, [categoryList, focusTarget, screen, selectedCategory, selectedChannel, visibleChannels])
 
   const openChannel = (channel: Channel) => {
+    setRecentChannels((current) => {
+      const next = [channel, ...current.filter((recent) => recent.id !== channel.id)].slice(0, recentChannelsLimit)
+      localStorage.setItem(recentChannelsStorageKey, JSON.stringify(next))
+      return next
+    })
     setSelectedChannel(channel)
     setPlayerError('')
     setPlayerState('idle')
@@ -204,11 +302,28 @@ function App() {
     : undefined
   const tizenPlayer = getTizenPlayer()
   const playerMode = getPlayerMode(tizenPlayer)
-  const selectedEpg = epg
-    .filter((item) => item.channelUuid === selectedChannel.id)
-    .slice(0, 4)
+  const epgByChannel = useMemo(() => {
+    const grouped = new Map<string, ApiEpg[]>()
+    epg.forEach((item) => {
+      const channelEvents = grouped.get(item.channelUuid) ?? []
+      channelEvents.push(item)
+      grouped.set(item.channelUuid, channelEvents)
+    })
+    grouped.forEach((events) => events.sort((a, b) => a.start - b.start))
+    return grouped
+  }, [epg])
+  const selectedEpg = epgByChannel.get(selectedChannel.id) ?? []
+  const now = Math.floor(Date.now() / 1000)
+  const currentEpgByChannel = useMemo(() => {
+    const current = new Map<string, ApiEpg>()
+    epgByChannel.forEach((events, channelId) => {
+      const currentEvent = events.find((item) => item.start <= now && item.stop > now) ?? events.find((item) => item.start > now)
+      if (currentEvent) current.set(channelId, currentEvent)
+    })
+    return current
+  }, [epgByChannel, now])
 
-  const formatEpgTime = (timestamp: number) => new Date(timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const formatEpgTime = (timestamp: number) => new Date(timestamp * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
   useEffect(() => {
     if (screen !== 'player' || !streamUrl || !tizenPlayer || !playerStageRef.current) return
@@ -238,14 +353,16 @@ function App() {
     <main className="app-shell">
       <div className="noise" />
       <header className="topbar">
-        <div className="brand-mark" aria-label="Tele TV">T<span>V</span></div>
+        <img className="brand-logo" src="/tele-logo.png" alt="Телевизионное интернет телевидение" />
         <div className="brand-copy">
           <strong>TELE TV</strong>
           <span>Телевидение без лишнего шума</span>
         </div>
         <div className="status-cluster">
-          <span className="live-dot" /> LIVE
-          <span className="clock">21:42</span>
+          {username && <span className="status-user">{username}</span>}
+          {screen !== 'login' && <button className="logout-button" type="button" onClick={logout} aria-label="Выйти">↪</button>}
+          <span className="clock">{currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="date-block"><strong>{formatHeaderDate(currentTime)}</strong><small>{weekday}</small></span>
         </div>
       </header>
 
@@ -284,25 +401,77 @@ function App() {
               <button key={category} className={selectedCategory === category ? 'active' : ''} onClick={() => { setSelectedCategory(category); setFocusTarget('categories') }}>{category}</button>
             ))}
           </nav>
+          {recentChannels.length > 0 && (
+           <section className="recent-channels" aria-label="Последние просмотренные каналы">
+             <div className="recent-heading"><span className="eyebrow">ПОСЛЕДНИЕ ПРОСМОТРЕННЫЕ</span></div>
+             <div className="recent-channel-list">
+               {recentChannels.map((channel) => (
+                 <button key={channel.id} className="recent-channel" onClick={() => openChannel(channel)} aria-label={channel.name}>
+                   <span className="channel-logo" style={{ background: channel.color }}>
+                     {channel.logo ? <img src={channel.logo} alt="" /> : channel.number}
+                   </span>
+                   <strong>{channel.name}</strong>
+                 </button>
+               ))}
+             </div>
+           </section>
+          )}
           <div className="channel-grid">
             {visibleChannels.length === 0 ? (
               <p className="empty-state">В этой категории нет доступных каналов</p>
             ) : visibleChannels.map((channel) => (
               <button key={channel.id} className={`channel-card ${focusTarget === 'channels' && selectedChannel.id === channel.id ? 'is-focused' : ''}`} onClick={() => openChannel(channel)}>
-                <span className="channel-logo" style={{ background: channel.color }}>
-                  {channel.logo ? <img src={channel.logo} alt="" onError={(event) => { event.currentTarget.hidden = true }} /> : channel.number}
-                </span>
-                <span className="channel-info"><strong>{channel.name}</strong><small>{channel.programme}</small></span>
-                <span className="channel-time">{channel.time}</span>
-              </button>
+               {(() => {
+                 const programme = currentEpgByChannel.get(channel.id)
+                 return (
+                   <>
+                     <span className="channel-logo" style={{ background: channel.color }}>
+                       {channel.logo ? <img src={channel.logo} alt="" onError={(event) => { event.currentTarget.hidden = true }} /> : channel.number}
+                     </span>
+                     <span className="channel-info"><strong>{channel.name}</strong><small>{programme?.title ?? channel.programme}</small></span>
+                     <span className="channel-time">{programme ? formatEpgTime(programme.start) : channel.time}</span>
+                   </>
+                 )
+               })()}
+             </button>
             ))}
           </div>
           <aside className="now-playing">
             <span className="eyebrow">ВЫБРАННЫЙ КАНАЛ</span>
             <div className="now-preview" style={{ background: `linear-gradient(135deg, ${selectedChannel.color}, #101820)` }}><span>{selectedChannel.number}</span><i>ON AIR</i></div>
             <strong>{selectedChannel.name}</strong>
-            {selectedEpg.length > 0 ? <div className="epg-list">{selectedEpg.map((item) => <div className="epg-item" key={item.eventId}><span>{formatEpgTime(item.start)} {item.ageRating > 0 ? `· ${item.ageRating}+` : ''}</span><strong>{item.title}</strong>{item.description && <small>{item.description}</small>}</div>)}</div> : <p>{selectedChannel.programme} <span>сейчас</span></p>}
+            {selectedEpg.length > 0 ? <div className="epg-list">{selectedEpg.slice(0, 4).map((item) => <div className="epg-item" key={item.eventId}><span>{formatEpgTime(item.start)} {item.ageRating > 0 ? `· ${item.ageRating}+` : ''}</span><strong>{item.title}</strong>{item.description && <small>{item.description}</small>}</div>)}</div> : <p>Программа передач недоступна</p>}
+            <button className="guide-button" type="button" onClick={() => setScreen('guide')}>Программа <span>G</span></button>
           </aside>
+        </section>
+      )}
+
+      {screen === 'guide' && (
+        <section className="guide-layout">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">ПРОГРАММА ПЕРЕДАЧ</span>
+              <h1>{selectedChannel.name}</h1>
+            </div>
+            <div className="remote-hint"><span>G</span> открыть · <span>Esc</span> назад</div>
+          </div>
+          <div className="guide-channel">
+            <span className="channel-logo" style={{ background: selectedChannel.color }}>{selectedChannel.number}</span>
+            <div><strong>Канал {selectedChannel.number}</strong><small>Полная программа передач</small></div>
+          </div>
+          {selectedEpg.length > 0 ? (
+            <div className="guide-list">
+              {selectedEpg.map((item) => (
+                <article className={`guide-item ${item.start <= now && item.stop > now ? 'is-current' : ''}`} key={item.eventId}>
+                  <time>{formatEpgTime(item.start)} – {formatEpgTime(item.stop)}</time>
+                  <div><strong>{item.title}</strong>{item.description && <p>{item.description}</p>}</div>
+                  {item.ageRating > 0 && <span className="guide-rating">{item.ageRating}+</span>}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state">Программа передач для этого канала недоступна</p>
+          )}
         </section>
       )}
 
