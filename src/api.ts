@@ -58,6 +58,9 @@ async function request(input: RequestInfo | URL, init?: RequestInit) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('Сервер не отвечает. Проверьте подключение к сети')
     }
+    if (error instanceof TypeError) {
+      throw new Error('Не удалось подключиться к API. Проверьте CORS и адрес сервера')
+    }
     throw error
   } finally {
     window.clearTimeout(timeout)
