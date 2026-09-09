@@ -3,7 +3,7 @@ import { ApiEpg, authorize, buildAuthenticatedStreamUrl, getCategories, getChann
 import { getPlayerMode, getTizenPlayer, startTizenPlayer, stopTizenPlayer } from './player'
 
 type Screen = 'login' | 'channels' | 'guide' | 'player'
-type FocusTarget = 'login' | 'categories' | 'channels' | 'player'
+type FocusTarget = 'login' | 'recent' | 'categories' | 'channels' | 'player'
 type PlayerState = 'idle' | 'connecting' | 'playing' | 'error'
 
 type Channel = {
@@ -84,15 +84,21 @@ function App() {
   )
   const [selectedChannel, setSelectedChannel] = useState(demoChannels[0])
   const [recentChannels, setRecentChannels] = useState<Channel[]>(() => loadRecentChannels())
+  const [selectedRecentChannel, setSelectedRecentChannel] = useState<Channel | undefined>(() => loadRecentChannels()[0])
   const [username, setUsername] = useState(savedCredentials.username)
   const [password, setPassword] = useState(savedCredentials.password)
   const [isLoading, setIsLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [playerError, setPlayerError] = useState('')
   const [playerState, setPlayerState] = useState<PlayerState>('idle')
+  const [playerMenuVisible, setPlayerMenuVisible] = useState(false)
+  const [playerEpgVisible, setPlayerEpgVisible] = useState(false)
+  const [playerMenuIndex, setPlayerMenuIndex] = useState(0)
+  const [playerInfoVisible, setPlayerInfoVisible] = useState(false)
   const playerStageRef = useRef<HTMLDivElement>(null)
   const [epg, setEpg] = useState<ApiEpg[]>([])
   const [currentTime, setCurrentTime] = useState(() => new Date())
+  const gridColumns = 8
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
@@ -111,6 +117,7 @@ function App() {
     setPassword('')
     setEpg([])
     setRecentChannels([])
+    setSelectedRecentChannel(undefined)
     localStorage.removeItem(recentChannelsStorageKey)
     localStorage.removeItem(credentialsStorageKey)
     setScreen('login')
@@ -120,6 +127,7 @@ function App() {
   const visibleChannels = useMemo(() => {
     return channelsByCategory[selectedCategory] ?? []
   }, [categoryList, channelList, channelsByCategory, selectedCategory])
+  const playerChannels = channelList.length > 0 ? channelList : visibleChannels
 
   useEffect(() => {
     if (visibleChannels.length > 0 && !visibleChannels.some((channel) => channel.id === selectedChannel.id)) {
@@ -193,12 +201,35 @@ function App() {
   }, [savedCredentials.password, savedCredentials.username])
 
   useEffect(() => {
+    if (screen !== 'player') {
+      setPlayerInfoVisible(false)
+      return
+    }
+    setPlayerInfoVisible(true)
+    const timer = window.setTimeout(() => setPlayerInfoVisible(false), 5000)
+    return () => window.clearTimeout(timer)
+  }, [screen, selectedChannel.id])
+
+  useEffect(() => {
+    if (screen !== 'player' || !playerMenuVisible) return
+    const timer = window.setTimeout(() => {
+      setPlayerMenuVisible(false)
+      setPlayerEpgVisible(false)
+    }, 10000)
+    return () => window.clearTimeout(timer)
+  }, [playerEpgVisible, playerMenuIndex, playerMenuVisible, screen])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' || event.key === 'Backspace') {
         event.preventDefault()
         if (screen === 'player') {
-          setScreen('channels')
-          setFocusTarget('channels')
+          if (playerEpgVisible) setPlayerEpgVisible(false)
+          else if (playerMenuVisible) setPlayerMenuVisible(false)
+          else {
+            setScreen('channels')
+            setFocusTarget('channels')
+          }
         }
         else if (screen === 'guide') {
           setScreen('channels')
@@ -216,7 +247,26 @@ function App() {
 
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
-        if (screen === 'channels' && focusTarget === 'categories') {
+        if (screen === 'player') {
+          if (event.key === 'ArrowLeft') {
+            if (playerEpgVisible) setPlayerEpgVisible(false)
+            else {
+              setPlayerMenuVisible(true)
+              setPlayerMenuIndex(Math.max(0, playerChannels.findIndex((channel) => channel.id === selectedChannel.id)))
+            }
+          } else if (playerMenuVisible) {
+            setPlayerEpgVisible(true)
+          }
+          return
+        }
+        if (screen === 'channels' && focusTarget === 'recent' && recentChannels.length > 0) {
+          const current = Math.max(0, recentChannels.findIndex((channel) => channel.id === selectedRecentChannel?.id))
+          const next = event.key === 'ArrowRight' ? current + 1 : current - 1
+          if (recentChannels[next]) {
+            setSelectedRecentChannel(recentChannels[next])
+            setSelectedChannel(recentChannels[next])
+          }
+        } else if (screen === 'channels' && focusTarget === 'categories') {
           const current = categoryList.indexOf(selectedCategory)
           const next = event.key === 'ArrowRight' ? current + 1 : current - 1
           if (categoryList[next]) setSelectedCategory(categoryList[next])
@@ -231,25 +281,41 @@ function App() {
       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault()
         if (screen === 'login') return
-        if (screen === 'player' && visibleChannels.length > 0) {
-          const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
-          const next = event.key === 'ArrowDown' ? current + 1 : current - 1
-          if (visibleChannels[next]) {
-            setSelectedChannel(visibleChannels[next])
-            setPlayerError('')
+        if (screen === 'player' && playerChannels.length > 0) {
+          if (playerMenuVisible) {
+            const current = Math.max(0, playerMenuIndex)
+            const next = event.key === 'ArrowDown' ? current + 1 : current - 1
+            if (playerChannels[next]) setPlayerMenuIndex(next)
+            return
           }
+          const current = playerChannels.findIndex((channel) => channel.id === selectedChannel.id)
+          const next = event.key === 'ArrowUp'
+            ? (current + 1) % playerChannels.length
+            : (current - 1 + playerChannels.length) % playerChannels.length
+          setSelectedChannel(playerChannels[next])
+          setPlayerError('')
           return
         }
         if (screen === 'channels' && focusTarget === 'channels' && visibleChannels.length > 0) {
           const current = visibleChannels.findIndex((channel) => channel.id === selectedChannel.id)
-          const next = event.key === 'ArrowDown' ? current + 2 : current - 2
+          if (event.key === 'ArrowUp' && current >= 0 && current < gridColumns) {
+            setFocusTarget('categories')
+            return
+          }
+          const next = event.key === 'ArrowDown' ? current + gridColumns : current - gridColumns
           if (visibleChannels[next]) setSelectedChannel(visibleChannels[next])
           else if (event.key === 'ArrowUp') setFocusTarget('categories')
+        } else if (screen === 'channels' && focusTarget === 'recent') {
+          if (event.key === 'ArrowDown') setFocusTarget('categories')
         } else if (screen === 'channels' && event.key === 'ArrowDown') {
-          if (!visibleChannels.some((channel) => channel.id === selectedChannel.id) && visibleChannels[0]) {
+          if (visibleChannels[0]) {
             setSelectedChannel(visibleChannels[0])
+            setFocusTarget('channels')
           }
-          setFocusTarget('channels')
+        } else if (screen === 'channels' && event.key === 'ArrowUp' && focusTarget === 'categories' && recentChannels.length > 0) {
+          setFocusTarget('recent')
+          setSelectedRecentChannel(recentChannels[0])
+          setSelectedChannel(recentChannels[0])
         } else {
           setFocusTarget('categories')
         }
@@ -271,18 +337,26 @@ function App() {
         event.preventDefault()
         if (screen === 'login') {
           document.querySelector<HTMLFormElement>('.login-panel')?.requestSubmit()
+        } else if (screen === 'player') {
+          if (playerMenuVisible && playerChannels[playerMenuIndex]) {
+            openChannel(playerChannels[playerMenuIndex])
+          } else {
+            setPlayerMenuVisible(true)
+            setPlayerMenuIndex(Math.max(0, playerChannels.findIndex((channel) => channel.id === selectedChannel.id)))
+          }
         } else if (screen === 'channels' && focusTarget === 'categories') {
           setFocusTarget('channels')
-        } else if (screen === 'channels' && focusTarget === 'channels') {
-          setScreen('player')
-          setFocusTarget('player')
+          if (visibleChannels[0]) setSelectedChannel(visibleChannels[0])
+        } else if (screen === 'channels' && (focusTarget === 'channels' || focusTarget === 'recent')) {
+          if (focusTarget === 'recent' && selectedRecentChannel) openChannel(selectedRecentChannel)
+          else openChannel(selectedChannel)
         }
       }
     }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [categoryList, focusTarget, screen, selectedCategory, selectedChannel, visibleChannels])
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [categoryList, focusTarget, gridColumns, playerChannels, playerEpgVisible, playerMenuIndex, playerMenuVisible, recentChannels, screen, selectedCategory, selectedChannel, selectedRecentChannel, visibleChannels])
 
   const openChannel = (channel: Channel) => {
     setRecentChannels((current) => {
@@ -290,9 +364,12 @@ function App() {
       localStorage.setItem(recentChannelsStorageKey, JSON.stringify(next))
       return next
     })
+    setSelectedRecentChannel(channel)
     setSelectedChannel(channel)
     setPlayerError('')
     setPlayerState('idle')
+    setPlayerMenuVisible(false)
+    setPlayerEpgVisible(false)
     setScreen('player')
     setFocusTarget('player')
   }
@@ -322,6 +399,12 @@ function App() {
     })
     return current
   }, [epgByChannel, now])
+  const currentProgramme = currentEpgByChannel.get(selectedChannel.id)
+  const programmeProgress = currentProgramme
+    ? Math.min(100, Math.max(0, ((now - currentProgramme.start) / Math.max(1, currentProgramme.stop - currentProgramme.start)) * 100))
+    : 0
+  const playerMenuChannel = playerChannels[playerMenuIndex] ?? selectedChannel
+  const playerMenuEpg = epgByChannel.get(playerMenuChannel.id) ?? []
 
   const formatEpgTime = (timestamp: number) => new Date(timestamp * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
@@ -389,6 +472,21 @@ function App() {
 
       {screen === 'channels' && (
         <section className="channels-layout">
+          {recentChannels.length > 0 && (
+            <section className="recent-channels" aria-label="Последние просмотренные каналы">
+              <div className="recent-heading"><span className="eyebrow">ПОСЛЕДНИЕ ПРОСМОТРЕННЫЕ</span></div>
+              <div className="recent-channel-list">
+                {recentChannels.map((channel) => (
+                  <button key={channel.id} className={`recent-channel ${focusTarget === 'recent' && selectedRecentChannel?.id === channel.id ? 'is-selected' : ''} ${focusTarget === 'recent' && selectedRecentChannel?.id === channel.id ? 'is-focused' : ''}`} onClick={() => openChannel(channel)} aria-label={channel.name}>
+                    <span className="channel-logo">
+                      {channel.logo ? <img src={channel.logo} alt="" /> : channel.number}
+                    </span>
+                    <strong>{channel.name}</strong>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <div className="section-heading">
             <div>
               <span className="eyebrow">ПРЯМОЙ ЭФИР</span>
@@ -401,31 +499,16 @@ function App() {
               <button key={category} className={selectedCategory === category ? 'active' : ''} onClick={() => { setSelectedCategory(category); setFocusTarget('categories') }}>{category}</button>
             ))}
           </nav>
-          {recentChannels.length > 0 && (
-           <section className="recent-channels" aria-label="Последние просмотренные каналы">
-             <div className="recent-heading"><span className="eyebrow">ПОСЛЕДНИЕ ПРОСМОТРЕННЫЕ</span></div>
-             <div className="recent-channel-list">
-               {recentChannels.map((channel) => (
-                 <button key={channel.id} className="recent-channel" onClick={() => openChannel(channel)} aria-label={channel.name}>
-                   <span className="channel-logo" style={{ background: channel.color }}>
-                     {channel.logo ? <img src={channel.logo} alt="" /> : channel.number}
-                   </span>
-                   <strong>{channel.name}</strong>
-                 </button>
-               ))}
-             </div>
-           </section>
-          )}
           <div className="channel-grid">
             {visibleChannels.length === 0 ? (
               <p className="empty-state">В этой категории нет доступных каналов</p>
             ) : visibleChannels.map((channel) => (
-              <button key={channel.id} className={`channel-card ${focusTarget === 'channels' && selectedChannel.id === channel.id ? 'is-focused' : ''}`} onClick={() => openChannel(channel)}>
+              <button key={channel.id} className={`channel-card ${focusTarget === 'channels' && selectedChannel.id === channel.id ? 'is-selected' : ''} ${focusTarget === 'channels' && selectedChannel.id === channel.id ? 'is-focused' : ''}`} onClick={() => openChannel(channel)}>
                {(() => {
                  const programme = currentEpgByChannel.get(channel.id)
                  return (
                    <>
-                     <span className="channel-logo" style={{ background: channel.color }}>
+                     <span className="channel-logo">
                        {channel.logo ? <img src={channel.logo} alt="" onError={(event) => { event.currentTarget.hidden = true }} /> : channel.number}
                      </span>
                      <span className="channel-info"><strong>{channel.name}</strong><small>{programme?.title ?? channel.programme}</small></span>
@@ -486,8 +569,60 @@ function App() {
               <div className="player-placeholder"><span>{selectedChannel.number}</span><strong>{selectedChannel.name}</strong><small>{playerError || 'Демо-поток готов к подключению'}</small></div>
             )}
             <div className="player-controls"><span className="play-icon">▶</span><div><strong>{selectedChannel.programme}</strong><small>Прямой эфир · {selectedChannel.time} · {playerMode} · {playerState}</small></div><span className="quality">HD</span></div>
+            {playerMenuVisible && (
+              <aside className={`player-side-menu ${playerEpgVisible ? 'with-epg' : ''}`}>
+                <div className="player-menu-list">
+                  <strong className="player-menu-title">КАНАЛЫ</strong>
+                  {playerChannels.map((channel, index) => (
+                    (() => {
+                      const programme = currentEpgByChannel.get(channel.id)
+                      const progress = programme
+                        ? Math.min(100, Math.max(0, ((now - programme.start) / Math.max(1, programme.stop - programme.start)) * 100))
+                        : 0
+                      return (
+                        <button
+                          key={channel.id}
+                          className={`${playerMenuIndex === index ? 'is-focused' : ''} ${selectedChannel.id === channel.id ? 'is-current' : ''}`}
+                          style={{ background: `linear-gradient(90deg, rgba(201, 224, 235, .5) ${progress}%, transparent ${progress}%)` }}
+                          onClick={() => openChannel(channel)}
+                        >
+                      <span>{channel.number}</span>
+                      <span className="player-menu-channel-name">{channel.name}</span>
+                      {programme && <small className="programme-title">{programme.title}</small>}
+                        </button>
+                      )
+                    })()
+                  ))}
+                </div>
+                {playerEpgVisible && (
+                  <div className="player-epg-panel">
+                    <div className="player-epg-heading">
+                      <strong>{playerMenuChannel.name}</strong>
+                      <small>ПРОГРАММА ПЕРЕДАЧ</small>
+                    </div>
+                    {playerMenuEpg.length > 0 ? playerMenuEpg.map((item) => (
+                      <article className={item.start <= now && item.stop > now ? 'is-current' : ''} key={item.eventId}>
+                        <time>{formatEpgTime(item.start)}</time>
+                        <strong>{item.title}</strong>
+                        {item.description && <small>{item.description}</small>}
+                      </article>
+                    )) : <p>Программа недоступна</p>}
+                  </div>
+                )}
+              </aside>
+            )}
+            {!playerMenuVisible && playerInfoVisible && (
+              <div
+                className="player-channel-toast"
+                style={{ background: `linear-gradient(90deg, rgba(201, 224, 235, .5) ${programmeProgress}%, rgba(4, 10, 14, .78) ${programmeProgress}%)` }}
+              >
+                <span className="eyebrow">СЕЙЧАС В ЭФИРЕ</span>
+                <strong>{selectedChannel.number} · {selectedChannel.name}</strong>
+                <small className="programme-title">{currentProgramme?.title ?? selectedChannel.programme}</small>
+                {currentProgramme && <time>{formatEpgTime(currentProgramme.start)} – {formatEpgTime(currentProgramme.stop)}</time>}
+              </div>
+            )}
           </div>
-          <div className="player-details"><span className="eyebrow">СЕЙЧАС В ЭФИРЕ</span><h1>{selectedChannel.name}</h1><p>{selectedChannel.programme}</p><button className="primary-button" onClick={() => setScreen('channels')}>Вернуться к каналам <span>Back</span></button></div>
         </section>
       )}
 
