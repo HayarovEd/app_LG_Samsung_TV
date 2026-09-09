@@ -43,6 +43,16 @@ h1, h2, p { margin: 0; } h1 { font-size: clamp(44px, 5vw, 76px); line-height: .9
 /* Match the original Android TV layout: logo header, pill categories and a dense logo grid. */
 :root { --cyan: #a6e6ff; --focus-green: #28c42e; --line: rgba(213, 222, 226, .18); }
 .app-shell { background: linear-gradient(180deg, #212341 0%, #000 100%); }
+.screen-login .topbar { display: none; }
+.screen-login .footer { display: none; }
+.screen-login .login-layout { display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; padding: 48px 25px; }
+.screen-login .login-copy { display: none; }
+.screen-login .login-panel { width: 500px; margin: 0; border: 0; border-radius: 16px; background: #212341; padding: 32px; }
+.login-logo { display: block; width: 100%; height: 96px; margin: 0 auto 12px; object-fit: contain; }
+.screen-login .login-panel h2 { margin-bottom: 16px; color: #eef3f5; text-align: center; font-size: 24px; }
+.screen-login .login-panel label { color: rgba(238, 243, 245, .8); }
+.screen-login .login-panel input { padding: 12px 10px; border: 1px solid rgba(213, 222, 226, .18); border-radius: 8px; background: rgba(15, 20, 22, .22); }
+.screen-login .login-panel input:focus { border-color: var(--cyan); }
 .topbar { height: 82px; margin: 0 25px; border-bottom: 0; }
 .brand-logo { width: 190px; height: 50px; object-fit: contain; object-position: left center; }
 .brand-copy { display: none; }
@@ -90,7 +100,7 @@ h1, h2, p { margin: 0; } h1 { font-size: clamp(44px, 5vw, 76px); line-height: .9
 .player-details h1 { margin: 8px 0 4px; font-size: 28px; }
 .player-details p { color: var(--muted); font: 11px 'DM Mono', monospace; }
 .player-details .primary-button { display: none; }
-.player-channel-toast { position: absolute; left: 28px; bottom: 88px; z-index: 2; display: grid; gap: 6px; padding: 14px 18px; color: #eef3f5; background: rgba(4, 10, 14, .7); border-left: 3px solid var(--focus-green); }
+.player-channel-toast { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: grid; gap: 6px; width: 100%; box-sizing: border-box; padding: 14px 28px; color: #eef3f5; background: rgba(4, 10, 14, .7); border-top: 3px solid var(--focus-green); }
 .player-channel-toast strong { font-size: 18px; }
 .player-channel-toast small, .player-channel-toast time { color: var(--muted); font: 11px 'DM Mono', monospace; }
 .player-channel-toast > * { text-shadow: 0 1px 3px rgba(0, 0, 0, .95); }

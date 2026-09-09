@@ -175,9 +175,16 @@ function App() {
         const channels = mappedChannels.filter((channel, index) => remoteChannels[index].categoryIds.includes(category.key))
         if (channels.length > 0) groups[category.name] = channels
         return groups
-      }, {})
+      }, {      })
+      groupedChannels['Все каналы'] = mappedChannels
       groupedChannels[radioChannel.category] = [radioChannel]
-      const categoryNames = Object.keys(groupedChannels)
+      const federalCategory = Object.keys(groupedChannels).find((category) => category.toLocaleLowerCase('ru-RU') === 'федеральные')
+      const categoryNames = [
+        'Все каналы',
+        ...(federalCategory ? [federalCategory] : []),
+        ...Object.keys(groupedChannels).filter((category) => category !== 'Все каналы' && category !== radioChannel.category && category !== federalCategory),
+        radioChannel.category,
+      ]
       setChannelList(mappedChannels)
       setChannelsByCategory(groupedChannels)
       setCategoryList(categoryNames)
@@ -433,7 +440,7 @@ function App() {
   }, [screen, streamUrl, tizenPlayer])
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell screen-${screen}`}>
       <div className="noise" />
       <header className="topbar">
         <img className="brand-logo" src="/tele-logo.png" alt="Телевизионное интернет телевидение" />
@@ -442,7 +449,7 @@ function App() {
           <span>Телевидение без лишнего шума</span>
         </div>
         <div className="status-cluster">
-          {username && <span className="status-user">{username}</span>}
+          {screen !== 'login' && username && <span className="status-user">{username}</span>}
           {screen !== 'login' && <button className="logout-button" type="button" onClick={logout} aria-label="Выйти">↪</button>}
           <span className="clock">{currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
           <span className="date-block"><strong>{formatHeaderDate(currentTime)}</strong><small>{weekday}</small></span>
@@ -452,20 +459,14 @@ function App() {
       {screen === 'login' && (
         <section className="login-layout">
           <div className="login-copy">
-            <span className="eyebrow">ДОМАШНИЙ ЭКРАН</span>
-            <h1>Смотрите<br /><em>свое телевидение.</em></h1>
-            <p>Каналы, прямой эфир и программа передач в одном спокойном пространстве.</p>
-            <div className="signal-line"><span /> Сигнал стабильный</div>
           </div>
           <form className={`login-panel ${focusTarget === 'login' ? 'is-focused' : ''}`} onSubmit={submitLogin}>
-            <div className="panel-kicker">ВХОД В АККАУНТ</div>
-            <h2>Добрый вечер</h2>
-            <p className="panel-note">Введите данные абонента, чтобы продолжить.</p>
+            <img className="login-logo" src="/tele-logo.png" alt="Tele TV" />
+            <h2>Вход в систему</h2>
             <label>ЛОГИН<input name="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Номер договора" autoComplete="username" /></label>
             <label>ПАРОЛЬ<input name="password" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="••••••••" autoComplete="current-password" /></label>
             {loginError && <p className="error-note">{loginError}</p>}
             <button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? 'Подключение...' : 'Войти'} <span>Enter ↵</span></button>
-            <button className="ghost-button" type="button" onClick={() => { setScreen('channels'); setFocusTarget('categories') }}>Демо-режим</button>
           </form>
         </section>
       )}
@@ -568,7 +569,6 @@ function App() {
             ) : (
               <div className="player-placeholder"><span>{selectedChannel.number}</span><strong>{selectedChannel.name}</strong><small>{playerError || 'Демо-поток готов к подключению'}</small></div>
             )}
-            <div className="player-controls"><span className="play-icon">▶</span><div><strong>{selectedChannel.programme}</strong><small>Прямой эфир · {selectedChannel.time} · {playerMode} · {playerState}</small></div><span className="quality">HD</span></div>
             {playerMenuVisible && (
               <aside className={`player-side-menu ${playerEpgVisible ? 'with-epg' : ''}`}>
                 <div className="player-menu-list">
