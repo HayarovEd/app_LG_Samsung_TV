@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Hls from 'hls.js'
 import { ApiEpg, authorize, buildAuthenticatedStreamUrl, getCategories, getChannels, getEpg, isApiConfigured } from './api'
 import { getPlayerMode, getTizenPlayer, startTizenPlayer, stopTizenPlayer } from './player'
 
@@ -96,6 +97,7 @@ function App() {
   const [playerMenuIndex, setPlayerMenuIndex] = useState(0)
   const [playerInfoVisible, setPlayerInfoVisible] = useState(false)
   const playerStageRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [epg, setEpg] = useState<ApiEpg[]>([])
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const gridColumns = 8
@@ -384,6 +386,10 @@ function App() {
   const streamUrl = selectedChannel.url && username && password
     ? buildAuthenticatedStreamUrl(selectedChannel.url, username, password)
     : undefined
+  const browserStreamAuth = username && password
+    ? encodeURIComponent(btoa(`${username}:${password}`))
+    : ''
+  const browserStreamUrl = `/iptv-hls/stream/channel/${encodeURIComponent(selectedChannel.id)}/index.m3u8?auth=${browserStreamAuth}`
   const tizenPlayer = getTizenPlayer()
   const playerMode = getPlayerMode(tizenPlayer)
   const epgByChannel = useMemo(() => {
@@ -438,6 +444,50 @@ function App() {
 
     return () => stopTizenPlayer(tizenPlayer)
   }, [screen, streamUrl, tizenPlayer])
+
+  useEffect(() => {
+    if (screen !== 'player' || tizenPlayer || !browserStreamUrl || !videoRef.current || !username || !password) return
+    const video = videoRef.current
+    const authorization = `Basic ${btoa(`${username}:${password}`)}`
+    let hls: Hls | undefined
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = browserStreamUrl
+    } else if (Hls.isSupported()) {
+      hls = new Hls({
+        xhrSetup: (request) => request.setRequestHeader('Authorization', authorization),
+        startPosition: -1,
+        liveSyncDurationCount: 2,
+        maxLiveSyncPlaybackRate: 1.5,
+        enableWorker: false,
+      })
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls?.recoverMediaError()
+          return
+        }
+        setPlayerState('error')
+        setPlayerError(`Ошибка HLS: ${data.details}`)
+      })
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        void video.play().catch(() => {
+          setPlayerError('Нажмите Play для запуска трансляции')
+        })
+      })
+      hls.loadSource(browserStreamUrl)
+      hls.attachMedia(video)
+    } else {
+      setPlayerError('Браузер не поддерживает HLS-воспроизведение')
+      return
+    }
+
+    return () => {
+      hls?.destroy()
+      video.removeAttribute('src')
+      video.load()
+    }
+  }, [browserStreamUrl, password, screen, tizenPlayer, username])
 
   return (
     <main className={`app-shell screen-${screen}`}>
@@ -565,7 +615,7 @@ function App() {
             {tizenPlayer && streamUrl && !playerError ? (
               <div className="native-player-surface" aria-label="Samsung AVPlay" />
             ) : streamUrl && !playerError ? (
-              <video className="live-video" src={streamUrl} autoPlay controls playsInline onPlaying={() => setPlayerState('playing')} onWaiting={() => setPlayerState('connecting')} onError={() => { setPlayerState('error'); setPlayerError('Поток недоступен в браузере телевизора') }} />
+              <video ref={videoRef} className="live-video" autoPlay controls playsInline onPlaying={() => setPlayerState('playing')} onWaiting={() => setPlayerState('connecting')} onError={() => setPlayerState('error')} />
             ) : (
               <div className="player-placeholder"><span>{selectedChannel.number}</span><strong>{selectedChannel.name}</strong><small>{playerError || 'Демо-поток готов к подключению'}</small></div>
             )}
