@@ -383,13 +383,18 @@ function App() {
     setFocusTarget('player')
   }
 
-  const streamUrl = selectedChannel.url && username && password
-    ? buildAuthenticatedStreamUrl(selectedChannel.url, username, password)
+  const isRadioChannel = selectedChannel.id === radioChannel.id
+  const streamUrl = selectedChannel.url && (isRadioChannel || (username && password))
+    ? isRadioChannel
+      ? selectedChannel.url
+      : buildAuthenticatedStreamUrl(selectedChannel.url, username, password)
     : undefined
   const browserStreamAuth = username && password
     ? encodeURIComponent(btoa(`${username}:${password}`))
     : ''
-  const browserStreamUrl = `/iptv-hls/stream/channel/${encodeURIComponent(selectedChannel.id)}/index.m3u8?auth=${browserStreamAuth}`
+  const browserStreamUrl = isRadioChannel
+    ? streamUrl
+    : `/iptv-hls/stream/channel/${encodeURIComponent(selectedChannel.id)}/index.m3u8?auth=${browserStreamAuth}`
   const tizenPlayer = getTizenPlayer()
   const playerMode = getPlayerMode(tizenPlayer)
   const epgByChannel = useMemo(() => {
@@ -451,7 +456,9 @@ function App() {
     const authorization = `Basic ${btoa(`${username}:${password}`)}`
     let hls: Hls | undefined
 
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    if (isRadioChannel) {
+      video.src = browserStreamUrl
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = browserStreamUrl
     } else if (Hls.isSupported()) {
       hls = new Hls({
@@ -487,7 +494,7 @@ function App() {
       video.removeAttribute('src')
       video.load()
     }
-  }, [browserStreamUrl, password, screen, tizenPlayer, username])
+  }, [browserStreamUrl, isRadioChannel, password, screen, tizenPlayer, username])
 
   return (
     <main className={`app-shell screen-${screen}`}>
