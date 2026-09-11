@@ -10,6 +10,7 @@ const sourceBaseUrl = (process.env.HLS_SOURCE_URL || 'http://iptv.teletvperm.ru:
   .replace(/\/$/, '')
 const ffmpegPath = process.env.FFMPEG_PATH || 'C:\\Users\\Impuls\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1.1-essentials_build\\bin\\ffmpeg.exe'
 const sessions = new Map()
+const pendingSessions = new Map()
 
 async function readWhenReady(filePath, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs
@@ -69,6 +70,30 @@ async function startSession(channelId, authorization) {
   return { id, session }
 }
 
+async function getSession(channelId, authorization) {
+  const sessionKey = `${channelId}:${authorization || ''}`
+  const existing = [...sessions.values()].find((item) => item.key === sessionKey)
+  if (existing) return existing
+
+  const pending = pendingSessions.get(sessionKey)
+  if (pending) return pending
+
+  const start = startSession(channelId, authorization).then(({ session }) => {
+    session.key = sessionKey
+    return session
+  }).finally(() => {
+    pendingSessions.delete(sessionKey)
+  })
+  pendingSessions.set(sessionKey, start)
+  return start
+}
+
+function stopSessions() {
+  for (const session of sessions.values()) {
+    if (!session.process.killed) session.process.kill('SIGTERM')
+  }
+}
+
 function send(response, status, body, contentType = 'text/plain; charset=utf-8') {
   response.writeHead(status, {
     'Content-Type': contentType,
@@ -91,11 +116,7 @@ const server = createServer(async (request, response) => {
     const authToken = requestUrl.searchParams.get('auth')
     const authorization = request.headers.authorization || (authToken ? `Basic ${authToken}` : undefined)
     console.log(`[hls] ${channelId} ${fileName} authorization=${Boolean(authorization)}`)
-    let session = [...sessions.values()].find((item) => item.channelId === channelId && (!authorization || item.authorization === authorization))
-    if (!session) {
-      const started = await startSession(channelId, authorization)
-      session = started.session
-    }
+    const session = await getSession(channelId, authorization)
 
     const filePath = join(session.directory, fileName)
     const file = await readWhenReady(filePath)
@@ -121,3 +142,6 @@ const server = createServer(async (request, response) => {
 server.listen(port, '127.0.0.1', () => {
   console.log(`HLS proxy listening on http://127.0.0.1:${port}`)
 })
+
+process.once('SIGINT', stopSessions)
+process.once('SIGTERM', stopSessions)

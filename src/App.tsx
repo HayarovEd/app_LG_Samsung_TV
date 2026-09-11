@@ -456,10 +456,21 @@ function App() {
     const authorization = `Basic ${btoa(`${username}:${password}`)}`
     let hls: Hls | undefined
 
+    video.pause()
+    video.removeAttribute('src')
+    video.load()
+    setPlayerState('connecting')
+
     if (isRadioChannel) {
       video.src = browserStreamUrl
+      void video.play().catch(() => {
+        setPlayerState('connecting')
+      })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = browserStreamUrl
+      void video.play().catch(() => {
+        setPlayerState('connecting')
+      })
     } else if (Hls.isSupported()) {
       hls = new Hls({
         xhrSetup: (request) => request.setRequestHeader('Authorization', authorization),
@@ -467,6 +478,12 @@ function App() {
         liveSyncDurationCount: 2,
         maxLiveSyncPlaybackRate: 1.5,
         enableWorker: false,
+        manifestLoadingMaxRetry: 6,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingMaxRetry: 6,
+        levelLoadingRetryDelay: 1000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 1000,
       })
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return
@@ -474,16 +491,20 @@ function App() {
           hls?.recoverMediaError()
           return
         }
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls?.startLoad(-1)
+          return
+        }
         setPlayerState('error')
         setPlayerError(`Ошибка HLS: ${data.details}`)
       })
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         void video.play().catch(() => {
-          setPlayerError('Нажмите Play для запуска трансляции')
+          setPlayerState('connecting')
         })
       })
-      hls.loadSource(browserStreamUrl)
       hls.attachMedia(video)
+      hls.loadSource(browserStreamUrl)
     } else {
       setPlayerError('Браузер не поддерживает HLS-воспроизведение')
       return
@@ -491,6 +512,7 @@ function App() {
 
     return () => {
       hls?.destroy()
+      video.pause()
       video.removeAttribute('src')
       video.load()
     }
@@ -622,7 +644,7 @@ function App() {
             {tizenPlayer && streamUrl && !playerError ? (
               <div className="native-player-surface" aria-label="Samsung AVPlay" />
             ) : streamUrl && !playerError ? (
-              <video ref={videoRef} className="live-video" autoPlay controls playsInline onPlaying={() => setPlayerState('playing')} onWaiting={() => setPlayerState('connecting')} onError={() => setPlayerState('error')} />
+              <video key={selectedChannel.id} ref={videoRef} className="live-video" autoPlay controls playsInline onPlaying={() => setPlayerState('playing')} onWaiting={() => setPlayerState('connecting')} onError={() => setPlayerState('error')} />
             ) : (
               <div className="player-placeholder"><span>{selectedChannel.number}</span><strong>{selectedChannel.name}</strong><small>{playerError || 'Демо-поток готов к подключению'}</small></div>
             )}
